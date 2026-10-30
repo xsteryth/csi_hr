@@ -1,19 +1,19 @@
 #include <Wire.h>
-#include "MAX30105.h"
-#include "heartRate.h"
+#include <MAX30105.h>
+#include <heartRate.h>
 
 MAX30105 particleSensor;
 
-const byte RATE_SIZE = 4;  // Number of measurements to average.
-byte rates[RATE_SIZE];     // Array of heart rates.
+const byte RATE_SIZE = 10;  // Number of measurements to average.
+byte rates[RATE_SIZE] = {0};     // Array of heart rates.
 byte rateSpot = 0;
 long lastBeat = 0;  // Time at which the last beat occurred.
 
-float beatsPerMinute;
-int beatAvg;
+float beatsPerMinute = 0;
+int beatAvg = 0;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   Serial.println("Initializing...");
 
   // Initialize sensor
@@ -34,8 +34,9 @@ void loop() {
 
   if (checkForBeat(irValue) == true) {
     // Sensed a beat.
-    long delta = millis() - lastBeat;
-    lastBeat = millis();
+    long now = millis();
+    long delta = now - lastBeat;
+    lastBeat = now;
 
     beatsPerMinute = 60 / (delta / 1000.0);
 
@@ -51,16 +52,16 @@ void loop() {
     }
   }
 
-  // Serial.print("IR=");
-  // Serial.print(irValue);
-  // Serial.print(", BPM=");
-  // Serial.print(beatsPerMinute);
-  // Serial.print(", Avg BPM=");
-  // Serial.print(beatAvg);
+  Serial.print(">IR:");
+  Serial.print(irValue);
+  Serial.print(", BPM:");
+  Serial.print(beatsPerMinute);
+  Serial.print(", Avg_BPM:");   
+  Serial.print(beatAvg);
 
-  if (irValue < 50000)
-    Serial.print(" Is your finger on the sensor?");
+  if (irValue < 50000) {
+    Serial.print(", Is your finger on the sensor?");
+  }
 
-  Serial.println(beatAvg);
-  delay(40); // Roughly match CSI sample rate.
+  Serial.println();
 }
