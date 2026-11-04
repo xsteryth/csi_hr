@@ -5,13 +5,18 @@
 
 MAX30105 particleSensor;
 
-const byte RATE_SIZE = 20;  // Number of measurements to average.
-float rates[RATE_SIZE] = {0};     // Array of heart rates.
-byte rateSpot = 0;
 long lastBeat = 0;  // Time at which the last beat occurred.
-byte rateCount = 0;
 
 float beatsPerMinute = 0;
+const unsigned long WINDOW_MS = 10000;
+
+const byte MAX_BEATS = 100;
+
+unsigned long beatTimestamps[MAX_BEATS];
+
+byte beatCount = 0;
+byte beatIndex = 0;
+
 float beatAvg = 0;
 
 void setup() {
@@ -40,34 +45,66 @@ void loop() {
   // Timestamp for every sensor reading
   long now = millis();
 
-  if (checkForBeat(irValue) == true) {
-    // Only calculate BPM if a previous beat exists
-    if (lastBeat != 0) {
-      // Sensed a beat.
-      long delta = now - lastBeat;
-      beatsPerMinute = 60 / (delta / 1000.0);
+  if (checkForBeat(irValue)) {
 
-      if (beatsPerMinute < 255 && beatsPerMinute > 20) {
-        rates[rateSpot++] = beatsPerMinute;
-        rateSpot %= RATE_SIZE;
+      if (lastBeat != 0) {
 
-        // Count only valid measurements
-        if (rateCount < RATE_SIZE) {
-          rateCount++;
-        }
+          unsigned long delta = now - lastBeat;
 
-        // Calculate average.
-        beatAvg = 0;
-        for (byte x = 0; x < rateCount; x++)
-          beatAvg += rates[x];
+          beatsPerMinute = 60000.0 / delta;
 
-        if (rateCount > 0) {
-            beatAvg /= rateCount;
-        }
+          if (beatsPerMinute >= 20 &&
+              beatsPerMinute <= 255) {
+
+              beatTimestamps[beatIndex] = now;
+
+              beatIndex = (beatIndex + 1) % MAX_BEATS;
+
+              if (beatCount < MAX_BEATS) {
+                  beatCount++;
+              }
+          }
       }
-    }
 
-    lastBeat = now;
+      lastBeat = now;
+  }
+
+  // Calculate BPM using beats within the last 40 seconds
+
+  unsigned long windowStart = now - WINDOW_MS;
+
+  unsigned long oldestBeat = 0;
+  unsigned long newestBeat = 0;
+
+  byte validBeats = 0;
+
+  for (byte i = 0; i < beatCount; i++) {
+
+      unsigned long t = beatTimestamps[i];
+
+      if (now - t <= WINDOW_MS) {
+
+          if (validBeats == 0 || t < oldestBeat) {
+              oldestBeat = t;
+          }
+
+          if (validBeats == 0 || t > newestBeat) {
+              newestBeat = t;
+          }
+
+          validBeats++;
+      }
+  }
+
+  if (validBeats >= 2 && newestBeat > oldestBeat) {
+
+      beatAvg =
+          (validBeats - 1) * 60000.0 /
+          (newestBeat - oldestBeat);
+
+  } else {
+
+      beatAvg = 0;
   }
 
   // Print timestamp, IR and average BPM

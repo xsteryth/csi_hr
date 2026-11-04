@@ -16,17 +16,22 @@ BAUD_RATE = 115200
 SAMPLE_RATE = 50.12           # Hz
 WINDOW_SIZE = 2000          # Approximately 20 seconds
 UPDATE_INTERVAL = 1.0       # Update every second
+RECORD_DURATION = 600 * 1000          # Record for 10 minutes
 
 MIN_HR = 42
 MAX_HR = 210
 
 OUTPUT_FILE = "hr_data.txt"
+TIMESTAMPS_FILE = "hr_timestamps.csv"
 
 # Keep recent BPM estimates for smoothing
 hr_history = deque(maxlen=5)
 
 # Store incoming IR samples
 ir_buffer = deque(maxlen=WINDOW_SIZE)
+
+COLLECT_TRAINING_DATA = True
+# COLLECT_TRAINING_DATA = False
 
 # ==========================================
 # FFT HEART RATE CALCULATION
@@ -59,50 +64,6 @@ def calculate_heart_rate(signal):
         d=1.0 / SAMPLE_RATE
     )
 
-    # Inspect possible fundamental frequency
-    fundamental_indices = np.where(
-        (frequencies >= 1.0) &
-        (frequencies <= 1.8)
-    )[0]
-
-    # Inspect possible higher harmonics
-    harmonic_indices = np.where(
-        (frequencies >= 2.0) &
-        (frequencies <= 3.5)
-    )[0]
-
-    fundamental_index = fundamental_indices[
-        np.argmax(magnitude[fundamental_indices])
-    ]
-
-    harmonic_index = harmonic_indices[
-        np.argmax(magnitude[harmonic_indices])
-    ]
-
-    fundamental_freq = frequencies[fundamental_index]
-    harmonic_freq = frequencies[harmonic_index]
-
-    print("\nFundamental frequency analysis:")
-
-    print(
-        f"Possible fundamental: {fundamental_freq:.3f} Hz "
-        f"({fundamental_freq * 60:.2f} BPM)"
-    )
-
-    print(
-        f"Possible harmonic: {harmonic_freq:.3f} Hz "
-        f"({harmonic_freq * 60:.2f} BPM)"
-    )
-
-    print(
-        f"Fundamental magnitude: {magnitude[fundamental_index]:.2f}"
-    )
-
-    print(
-        f"Harmonic magnitude: {magnitude[harmonic_index]:.2f}"
-    )
-
-
     valid_indices = np.where(
         (frequencies >= 0.5) &
         (frequencies <= 3.5)
@@ -110,16 +71,16 @@ def calculate_heart_rate(signal):
 
     top_indices = valid_indices[
     np.argsort(magnitude[valid_indices])[-5:][::-1]
-]
+    ]
 
-    print("\nStrongest frequency components:")
+    # print("\nStrongest frequency components:")
 
-    for idx in top_indices:
-        print(
-            f"Frequency: {frequencies[idx]:.3f} Hz | "
-            f"BPM: {frequencies[idx] * 60:.2f} | "
-            f"Magnitude: {magnitude[idx]:.2f}"
-        )
+    # for idx in top_indices:
+    #     print(
+    #         f"Frequency: {frequencies[idx]:.3f} Hz | "
+    #         f"BPM: {frequencies[idx] * 60:.2f} | "
+    #         f"Magnitude: {magnitude[idx]:.2f}"
+    #     )
 
     if len(valid_indices) == 0:
         return None
@@ -144,7 +105,6 @@ def calculate_heart_rate(signal):
             offset = 0.0
 
         offset = np.clip(offset, -0.5, 0.5)
-
     else:
         offset = 0.0
 
@@ -163,75 +123,91 @@ def calculate_heart_rate(signal):
 # SAVE HEART RATE
 # ==========================================
 
-def save_heart_rate(bpm):
+# def save_heart_rate(bpm):
 
-    timestamp = datetime.now().strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+#     timestamp = datetime.now().strftime(
+#         "%Y-%m-%d %H:%M:%S"
+#     )
+
+#     with open(OUTPUT_FILE, "a") as file:
+#         file.write(f"{timestamp},{bpm:.2f}\n")
+
+def save_heart_rate(bpm, timestamp):
 
     with open(OUTPUT_FILE, "a") as file:
-        file.write(f"{timestamp},{bpm:.2f}\n")
+        file.write(f"{bpm:.2f}\n")
 
+    with open(TIMESTAMPS_FILE, "a") as file:
+        file.write(f"{timestamp:.6f}\n")
 
-def plot_ppg(signal):
+# ==========================================
+# PLOTS
+# ==========================================
+# def plot_ppg(signal):
 
-    signal = np.asarray(signal)
+#     signal = np.asarray(signal)
 
-    time_axis = np.arange(len(signal)) / SAMPLE_RATE
+#     time_axis = np.arange(len(signal)) / SAMPLE_RATE
 
-    plt.figure(figsize=(12, 4))
+#     plt.figure(figsize=(12, 4))
 
-    plt.plot(time_axis, signal)
+#     plt.plot(time_axis, signal)
 
-    plt.xlabel("Time (seconds)")
-    plt.ylabel("IR Value")
-    plt.title("MAX30102 Raw PPG Signal")
+#     plt.xlabel("Time (seconds)")
+#     plt.ylabel("IR Value")
+#     plt.title("MAX30102 Raw PPG Signal")
 
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+#     plt.grid(True)
+#     plt.tight_layout()
+#     plt.show()
 
-def plot_fft(signal):
+# def plot_fft(signal):
 
-    signal = np.asarray(signal, dtype=float)
+#     signal = np.asarray(signal, dtype=float)
 
-    signal = signal - np.mean(signal)
+#     signal = signal - np.mean(signal)
 
-    window = np.hanning(len(signal))
+#     window = np.hanning(len(signal))
 
-    fft_result = np.fft.rfft(signal * window)
+#     fft_result = np.fft.rfft(signal * window)
 
-    magnitude = np.abs(fft_result)
+#     magnitude = np.abs(fft_result)
 
-    frequencies = np.fft.rfftfreq(
-        len(signal),
-        d=1.0 / SAMPLE_RATE
-    )
+#     frequencies = np.fft.rfftfreq(
+#         len(signal),
+#         d=1.0 / SAMPLE_RATE
+#     )
 
-    plt.figure(figsize=(12, 4))
+#     plt.figure(figsize=(12, 4))
 
-    plt.plot(frequencies, magnitude)
+#     plt.plot(frequencies, magnitude)
 
-    plt.xlim(0.5, 3.5)
+#     plt.xlim(0.5, 3.5)
 
-    plt.xlabel("Frequency (Hz)")
-    plt.ylabel("Magnitude")
-    plt.title("MAX30102 FFT Spectrum")
+#     plt.xlabel("Frequency (Hz)")
+#     plt.ylabel("Magnitude")
+#     plt.title("MAX30102 FFT Spectrum")
 
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+#     plt.grid(True)
+#     plt.tight_layout()
+#     plt.show()
 
 # ==========================================
 # MAIN PROGRAM
 # ==========================================
-plots_shown = False
+# plots_shown = False
 
 def main():
+    print(f"COLLECT_TRAINING_DATA = {COLLECT_TRAINING_DATA}")
+    print(f"Record duration = {RECORD_DURATION / 1000} seconds")
+    if COLLECT_TRAINING_DATA:
 
-    # This instantly wipes the file empty
-    with open(OUTPUT_FILE, "w") as file:
-        pass
+        # This instantly wipes the file empty
+        with open(OUTPUT_FILE, "w") as file:
+            pass
+        
+        with open(TIMESTAMPS_FILE, "w") as file:
+            pass
 
     print("Connecting to MAX30102...")
 
@@ -283,14 +259,19 @@ def main():
             except (ValueError, IndexError) as e:
                 print(f"Parsing error: {e} | Received: {line}")
                 continue
+            
+            if timestamp_ms > RECORD_DURATION:
+                print("Data collected.")
+                break
 
             # Check finger presence
             if ir_value < 50000:
                 print("Please place your finger on the sensor.")
                 ir_buffer.clear()
                 hr_history.clear()
-                plots_shown = False
                 continue
+            # else:
+            #     print("Finger detected")
 
             ir_buffer.append(ir_value)
 
@@ -305,10 +286,10 @@ def main():
 
                 if bpm is not None:
 
-                    if not plots_shown:
-                        plot_ppg(ir_buffer)
-                        plot_fft(ir_buffer)
-                        plots_shown = True
+                    # if not plots_shown:
+                    #     plot_ppg(ir_buffer)
+                    #     plot_fft(ir_buffer)
+                    #     plots_shown = True
 
                     hr_history.append(bpm)
 
@@ -316,12 +297,14 @@ def main():
                     stable_bpm = np.median(hr_history)
 
                     print(
+                        f"Timestamp: {timestamp_ms} | "
                         f"FFT BPM: {bpm:.2f} | "
                         f"Stable BPM: {stable_bpm:.2f} | "
                         f"Time-domain BPM: {td_bpm:.2f}"
                     )
 
-                    save_heart_rate(stable_bpm)
+                    if COLLECT_TRAINING_DATA:
+                        save_heart_rate(stable_bpm, time.time())
 
                 last_update = time.time()
 

@@ -42,9 +42,11 @@ from typing import List, Tuple, Optional, Dict, Any
 import tensorflow as tf
 from tensorflow import keras
 import numpy as np
+import time
 
 
 COLLECT_TRAINING_DATA = True
+# COLLECT_TRAINING_DATA = False
 
 # Reduce displayed waveforms to avoid display freezes
 CSI_VAID_SUBCARRIER_INTERVAL = 1
@@ -55,6 +57,8 @@ CSI_DATA_COLUMNS = 490
 DATA_COLUMNS_NAMES_C5C6 = ["type", "id", "mac", "rssi", "rate","noise_floor","fft_gain","agc_gain", "channel", "local_timestamp",  "sig_len", "rx_state", "len", "first_word", "data"]
 DATA_COLUMNS_NAMES = ["type", "id", "mac", "rssi", "rate", "sig_mode", "mcs", "bandwidth", "smoothing", "not_sounding", "aggregation", "stbc", "fec_coding",
                       "sgi", "noise_floor", "ampdu_cnt", "channel", "secondary_channel", "local_timestamp", "ant", "sig_len", "rx_state", "len", "first_word", "data"]
+
+RECORD_DURATION = 600          # Record for 10 minutes
 
 csi_data_array = np.zeros(
     [CSI_DATA_INDEX, CSI_DATA_COLUMNS], dtype=np.float64)
@@ -68,6 +72,7 @@ agc_gains = []
 
 if COLLECT_TRAINING_DATA:
     train = open("training_data.txt", 'w')
+    timestamp_file = open("csi_timestamps.csv", "w")
 else:
     model = keras.models.load_model("csi_hr.keras", safe_mode=False)
 
@@ -169,6 +174,7 @@ def savitzky_golay_smooth(signal: np.ndarray,
     return savgol_filter(x, wl, polyorder)
 
 
+
 def csi_data_read_parse(port: str, csv_writer, log_file_fd,callback=None):
     global fft_gains, agc_gains
     ser = serial.Serial(port=port, baudrate=921600,bytesize=8, parity='N', stopbits=1)
@@ -179,9 +185,15 @@ def csi_data_read_parse(port: str, csv_writer, log_file_fd,callback=None):
         print("open failed")
         return
     
+    START_TIME = time.time()
+
     frame_num = 0
     shaped_data = []
     while True:
+        elapsed_time = time.time() - START_TIME
+        if elapsed_time > RECORD_DURATION and COLLECT_TRAINING_DATA:
+            print("CSI collection completed.")
+            break   
         frame_num += 1
 
         strings = str(ser.readline())
@@ -200,7 +212,7 @@ def csi_data_read_parse(port: str, csv_writer, log_file_fd,callback=None):
         csi_data_len = int (csi_data[-3])
         if len(csi_data) != len(DATA_COLUMNS_NAMES) and len(csi_data) != len(DATA_COLUMNS_NAMES_C5C6):
             # print("element number is not equal",len(csi_data),len(DATA_COLUMNS_NAMES) )
-            # print(csi_data)
+            # print(csi_data)d
             log_file_fd.write("element number is not equal\n")
             log_file_fd.write(strings + '\n')
             log_file_fd.flush()
@@ -243,8 +255,15 @@ def csi_data_read_parse(port: str, csv_writer, log_file_fd,callback=None):
         # Step 4: Pulse shaping.
         shaped = savitzky_golay_smooth(bandpassed, window_length=15, polyorder=3)
 
+        time
         if COLLECT_TRAINING_DATA:
-            train.write(','.join(map(str, shaped)) + '\n')
+            if elapsed_time > 40:
+                train.write(','.join(map(str, shaped)) + '\n')
+                timestamp_file.write(
+                    f"{time.time():.6f}\n"
+                )
+                train.flush()
+                timestamp_file.flush()
         else:
             shaped_data.append(shaped)
             if len(shaped_data) > 100:
@@ -273,6 +292,9 @@ def csi_data_read_parse(port: str, csv_writer, log_file_fd,callback=None):
         for i in range(csi_data_len // 2):
             csi_data_complex[-1][i] = complex(csi_raw_data[i * 2 + 1],
                                             csi_raw_data[i * 2])
+    if COLLECT_TRAINING_DATA:
+        timestamp_file.close()
+        train.close()
     ser.close()
     return
 
@@ -280,7 +302,7 @@ def csi_data_read_parse(port: str, csv_writer, log_file_fd,callback=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="Read CSI data from serial port and display it graphically")
-    parser.add_argument('-p', '--port', dest='port', action='store', required=True,
+    parser.add_argument('-p', '--port', dest='port', action='store', default='/dev/ttyACM1',
                         help="Serial port number of csv_recv device")
     parser.add_argument('-s', '--store', dest='store_file', action='store', default='./csi_data.csv',
                         help="Save the data printed by the serial port to a file")
@@ -291,5 +313,8 @@ if __name__ == '__main__':
     serial_port = args.port
     file_name = args.store_file
     log_file_name = args.log_file
+
+    print(f"COLLECT_TRAINING_DATA = {COLLECT_TRAINING_DATA}")
+    print(f"Record duration = {RECORD_DURATION} seconds")
 
     csi_data_read_parse(serial_port, csv.writer(open(file_name, 'w')), open(log_file_name, 'w'))
