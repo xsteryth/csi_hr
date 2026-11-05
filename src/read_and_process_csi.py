@@ -71,10 +71,10 @@ agc_gains = []
 
 
 if COLLECT_TRAINING_DATA:
-    train = open("training_data.txt", 'w')
-    timestamp_file = open("csi_timestamps.csv", "w")
+    train = open("../data/training_data.txt", 'w')
+    timestamp_file = open("../data/csi_timestamps.csv", "w")
 else:
-    model = keras.models.load_model("csi_hr.keras", safe_mode=False)
+    model = keras.models.load_model("../data/csi_hr.keras", safe_mode=False)
 
 def parse_csi_amplitudes(csi_str):
     # Convert the string into a Python list of ints

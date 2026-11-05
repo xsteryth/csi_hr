@@ -3,14 +3,14 @@ import numpy as np
 import csv
 import os
 
-CSI_FILE = "training_data.txt"
-CSI_TIME_FILE = "csi_timestamps.csv"
+CSI_FILE = "../data/training_data.txt"
+CSI_TIME_FILE = "../data/csi_timestamps.csv"
 
-HR_FILE = "hr_data.txt"
-HR_TIME_FILE = "hr_timestamps.csv"
+HR_FILE = "../data/hr_data.txt"
+HR_TIME_FILE = "../data/hr_timestamps.csv"
 
-OUTPUT_CSI = "training_data_aligned.txt"
-OUTPUT_HR = "hr_data_aligned.txt"
+OUTPUT_CSI = "../data/training_data_aligned.txt"
+OUTPUT_HR = "../data/hr_data_aligned.txt"
 
 
 def load_values(filename):

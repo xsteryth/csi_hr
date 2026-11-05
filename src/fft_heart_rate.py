@@ -21,8 +21,8 @@ RECORD_DURATION = 600 * 1000          # Record for 10 minutes
 MIN_HR = 42
 MAX_HR = 210
 
-OUTPUT_FILE = "hr_data.txt"
-TIMESTAMPS_FILE = "hr_timestamps.csv"
+OUTPUT_FILE = "../data/hr_data.txt"
+TIMESTAMPS_FILE = "../data/hr_timestamps.csv"
 
 # Keep recent BPM estimates for smoothing
 hr_history = deque(maxlen=5)
